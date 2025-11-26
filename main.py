@@ -14,8 +14,10 @@ app = App(token=os.environ["SLACK_BOT_TOKEN"])
 NEWS_POTATO_CHANNEL = "C09V873SXG9"
 FREE_POTATO_CHANNEL = "C09V0J81W1L"
 
+CSV_RESPONSES_FILE = "responses.csv"
+
 KEYWORD_RESPONSES = {}
-with open("responses.csv", encoding="utf-8") as f:
+with open(CSV_RESPONSES_FILE, encoding="utf-8") as f:
     reader = csv.DictReader(f)
     for row in reader:
         KEYWORD_RESPONSES[row["keyword"]] = row["response"]
@@ -38,6 +40,31 @@ def reply_message(message, say):
             if keyword in text:
                 say(response.format(user=user))
                 break
+
+
+def load_keywords():
+    keywords = []
+    with open(CSV_RESPONSES_FILE, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            keywords.append(row["keyword"])
+    return keywords
+
+
+@app.command("/감자어목록")
+def list_keywords(ack, say):
+    ack()
+    keywords = load_keywords()
+
+    if not keywords:
+        say(channel=FREE_POTATO_CHANNEL, text="등록된 감자어가 없습니다.")
+        return
+
+    keywords_text = "\n".join(f"- {kw}" for kw in keywords)
+    say(
+        channel=FREE_POTATO_CHANNEL,
+        text=f"현재 등록된 감자어 목록입니다:\n{keywords_text}",
+    )
 
 
 @app.event("member_joined_channel")
