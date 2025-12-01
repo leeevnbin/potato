@@ -1,6 +1,10 @@
 import os
 import csv
 import re
+import random
+import schedule
+import time
+import threading
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 from dotenv import load_dotenv
@@ -13,6 +17,7 @@ app = App(token=os.environ["SLACK_BOT_TOKEN"])
 
 NEWS_POTATO_CHANNEL = "C09V873SXG9"
 FREE_POTATO_CHANNEL = "C09V0J81W1L"
+ADMIN_USER = "U09UNTJQUJX"
 
 CSV_RESPONSES_FILE = "responses.csv"
 
@@ -25,8 +30,6 @@ with open(CSV_RESPONSES_FILE, encoding="utf-8") as f:
 keywords = list(KEYWORD_RESPONSES.keys())
 
 pattern = "|".join(re.escape(k) for k in keywords)
-
-ADMIN_USER = "U09UNTJQUJX"
 
 
 @app.message(re.compile(pattern))
@@ -150,6 +153,52 @@ def delete_app_home(ack, body, client: WebClient):
         channel=user_id,
         text=f"찜감자봇 메시지 {deleted_count}개를 삭제했습니다.",
     )
+
+
+def load_messages(file_path="messages.csv"):
+    messages = []
+    with open(file_path, encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            messages.append(row["message"])
+    return messages
+
+
+MESSAGES = load_messages()
+
+
+def get_random_messages():
+    return random.choice(MESSAGES)
+
+
+def get_all_users(client: WebClient):
+    users = []
+    response = client.users_list()
+    for member in response["members"]:
+        if not member.get("is_bot") and member.get("deleted") is False:
+            users.append(member["id"])
+    return users
+
+
+def send_daily_message():
+    message = get_random_messages()
+    user_ids = get_all_users(app.client)
+    for user_id in user_ids:
+        dm = app.client.conversations_open(users=user_id)
+        dm_channel = dm["channel"]["id"]
+
+        app.client.chat_postMessage(channel=dm_channel, text=message)
+
+
+def run_scheduler():
+    schedule.every().day.at("09:00").do(send_daily_message)
+    while True:
+        schedule.run_pending()
+        time.sleep(30)
+
+
+scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
+scheduler_thread.start()
 
 
 if __name__ == "__main__":
